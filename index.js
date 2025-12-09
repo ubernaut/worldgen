@@ -65,6 +65,7 @@ const mobileControlsEl = document.getElementById('mobileControls');
 const surfaceOnlyBtn = document.getElementById('surfaceOnly');
 const configToggleEl = document.getElementById('configToggle');
 const configPanelEl = document.getElementById('configPanel');
+const vrToggleEl = document.getElementById('vrToggle');
 const reticleEl = document.getElementById('reticle');
 const leftStickSensitivityEl = document.getElementById('leftStickSensitivity');
 const leftStickSensitivityValueEl = document.getElementById('leftStickSensitivityValue');
@@ -94,7 +95,11 @@ scene.fog = new THREE.Fog(0x05070f, 30, 120);
 const planetGroup = new THREE.Group();
 scene.add(planetGroup);
 
+const userGroup = new THREE.Group();
+scene.add(userGroup);
+
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+userGroup.add(camera);
 camera.position.set(0, 10, 28);
 
 const controls = new TrackballControls(camera, renderer.domElement);
@@ -138,8 +143,11 @@ let clouds = [];
 let cloudLayerSettings = [];
 let lastPlanetSettings = null;
 let savedOrbitState = null;
+let xrSession = null;
+let xrPrevButtons = new Map();
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
+let vrSupported = false;
 
 window.addEventListener('mousedown', (event) => {
     if (event.button === 1) { // Middle Click
@@ -1273,11 +1281,14 @@ function onResize() {
 }
 
 function animate() {
-    requestAnimationFrame(animate);
     const delta = clock.getDelta();
     
     updateRangeLabels();
     
+    if (xrSession) {
+        pollVRInputs();
+    }
+
     if (tinyControls.enabled) {
         tinyControls.update(delta);
     } else {
@@ -1325,6 +1336,109 @@ function toggleConfigPanel(show) {
 
 if (configToggleEl) {
     configToggleEl.addEventListener('click', () => toggleConfigPanel());
+}
+
+async function checkVRSupport() {
+    if (!navigator.xr || !vrToggleEl) return;
+    try {
+        vrSupported = await navigator.xr.isSessionSupported('immersive-vr');
+        vrToggleEl.style.display = vrSupported ? 'block' : 'none';
+        if (vrToggleEl) vrToggleEl.disabled = !vrSupported;
+    } catch (err) {
+        console.warn('XR support check failed', err);
+    }
+}
+
+async function startVR() {
+    if (!navigator.xr) {
+        setStatus('WebXR not available');
+        return;
+    }
+    try {
+        const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor'] });
+        xrSession = session;
+        renderer.xr.enabled = true;
+        await renderer.xr.setSession(session);
+
+        if (controls) controls.enabled = false;
+
+        // Ensure orbit camera is outside the planet before entering XR
+        if (planet && !tinyControls.enabled) {
+            const surfaceRadius = (lastPlanetSettings?.radius ?? BASE_RADIUS_UNITS) * getPlanetScale() + (lastPlanetSettings?.heightScale ?? 0);
+            const minDist = Math.max(surfaceRadius * 2.0, 30);
+            const dir = camera.position.clone().sub(controls.target);
+            if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+            dir.normalize();
+            const target = new THREE.Vector3(0, 0, 0);
+            const newPos = target.clone().sub(dir.multiplyScalar(minDist));
+            
+            userGroup.position.copy(newPos);
+            userGroup.lookAt(target);
+            
+            // Reset camera local transform as it's now relative to userGroup
+            camera.position.set(0, 0, 0);
+            camera.rotation.set(0, 0, 0);
+        }
+        vrToggleEl.textContent = 'Exit VR';
+        setStatus('VR session started');
+        session.addEventListener('end', () => {
+            xrSession = null;
+            xrPrevButtons.clear();
+            renderer.xr.enabled = false;
+            
+            userGroup.position.set(0, 0, 0);
+            userGroup.rotation.set(0, 0, 0);
+            userGroup.quaternion.identity();
+            if (controls) controls.enabled = true;
+
+            vrToggleEl.textContent = 'Enter VR';
+            setStatus('');
+        });
+    } catch (err) {
+        console.error(err);
+        setStatus('VR start failed');
+    }
+}
+
+function stopVR() {
+    if (xrSession) {
+        xrSession.end();
+    }
+}
+
+function pollVRInputs() {
+    if (!xrSession || !input) return;
+    let moveX = 0;
+    let moveY = 0;
+    const dead = 0.15;
+    for (const source of xrSession.inputSources) {
+        const gp = source.gamepad;
+        if (!gp) continue;
+        const prev = xrPrevButtons.get(source) || [];
+        const buttons = gp.buttons || [];
+        const axes = gp.axes || [];
+        if (axes.length >= 4) {
+            moveX = axes[2];
+            moveY = axes[3];
+        }
+        // Button mapping: 0 jump, 1 fly toggle, 3 exit
+        const pressed = buttons.map((b) => !!b && b.pressed);
+        if (pressed[0] && !prev[0]) input.trigger('jump');
+        if (pressed[1] && !prev[1]) input.trigger('flyToggle');
+        if (pressed[3] && !prev[3]) input.trigger('exit');
+        xrPrevButtons.set(source, pressed);
+    }
+    input.setAction('forward', moveY > dead);
+    input.setAction('backward', moveY < -dead);
+    input.setAction('left', moveX > dead);
+    input.setAction('right', moveX < -dead);
+}
+
+if (vrToggleEl) {
+    vrToggleEl.addEventListener('click', () => {
+        if (xrSession) stopVR();
+        else startVR();
+    });
 }
 
 regenBtn.addEventListener('click', () => generateWorld(presetEl.value));
@@ -1429,4 +1543,5 @@ applyPreset(presetEl.value);
 generateWorld(presetEl.value);
 renderCloudLayerControls();
 bindMobileControls();
-animate();
+renderer.setAnimationLoop(animate);
+checkVRSupport();

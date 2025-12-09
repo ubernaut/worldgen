@@ -10,3 +10,4 @@ llm instructions for this file: this file is a log of development. It's used to 
 - 2024-05-27: Mobile overlay now hides when not in Tiny mode; only shows Surface button in overview, with action buttons moved above right stick; surface trigger now forces handler so it executes.
 - 2024-05-27: Refined swimming transitions to ignore shallow water, tighten entry/exit thresholds, and realign on exit to avoid tilted posture.
 - 2024-05-27: Added center reticle to indicate Surface target; it hides when config panel is open.
+- 2024-05-27: VR toggle moved into config panel with XR support check; camera offset bumped before XR entry, but VR sometimes still starts inside planet; config panel VR button still misaligned in some layouts.

@@ -26,3 +26,4 @@ recent progress:
 - Input router scaffold added (desktop keymap wired, mobile/desktop mode hook); TinyPlanetControls now reads shared action state, paving the way for touch/VR mappings.
 - TrackballControls now replace OrbitControls for overview; added basic mobile overlay buttons (move/run/jump/fly/exit) wired into the input router and auto-shown on small screens.
 - Water shader now blends to ice near poles using the iceCap slider.
+- VR entry/exit button added (WebXR), with thumbstick locomotion mapping and button triggers (jump/fly/exit) via the input router.

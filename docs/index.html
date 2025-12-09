@@ -184,7 +184,7 @@
       top: 60px;
       right: 16px;
       z-index: 19;
-      width: 220px;
+      width: 240px;
       padding: 12px;
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -195,8 +195,26 @@
     #configPanel h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.05em; }
     #configPanel .field { margin-bottom: 10px; }
     #configPanel label { color: var(--muted); font-size: 12px; display: block; margin-bottom: 6px; }
-    #configPanel input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
+    #configPanel input[type="range"] { width: 100%; accent-color: var(--accent-strong); box-sizing: border-box; }
     #configPanel .value { font-size: 12px; color: var(--text); float: right; }
+    #configPanel button {
+      width: 100%;
+      margin: 6px 0 10px 0;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      display: block;
+      box-sizing: border-box;
+    }
+    #configPanel .field::after {
+      content: '';
+      display: block;
+      clear: both;
+    }
     /* Mobile controls */
     #mobileControls {
       position: fixed;
@@ -269,7 +287,7 @@
       display: none;
     }
   </style>
-  <script type="module" crossorigin src="./assets/index-D3gPidam.js"></script>
+  <script type="module" crossorigin src="./assets/index-CrpkEIPB.js"></script>
 </head>
 <body>
   <div id="reticle" aria-hidden="true"></div>
@@ -290,6 +308,9 @@
     </div>
     <div class="field">
       <label><input id="invertLook" type="checkbox"> Invert vertical look</label>
+    </div>
+    <div class="field">
+      <button id="vrToggle" type="button">Enter VR</button>
     </div>
   </div>
   <canvas id="viewport"></canvas>
