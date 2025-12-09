@@ -63,6 +63,16 @@ const movePadEl = document.getElementById('movePad');
 const lookPadEl = document.getElementById('lookPad');
 const mobileControlsEl = document.getElementById('mobileControls');
 const surfaceOnlyBtn = document.getElementById('surfaceOnly');
+const configToggleEl = document.getElementById('configToggle');
+const configPanelEl = document.getElementById('configPanel');
+const reticleEl = document.getElementById('reticle');
+const leftStickSensitivityEl = document.getElementById('leftStickSensitivity');
+const leftStickSensitivityValueEl = document.getElementById('leftStickSensitivityValue');
+const lookSensitivityXEl = document.getElementById('lookSensitivityX');
+const lookSensitivityXValueEl = document.getElementById('lookSensitivityXValue');
+const lookSensitivityYEl = document.getElementById('lookSensitivityY');
+const lookSensitivityYValueEl = document.getElementById('lookSensitivityYValue');
+const invertLookEl = document.getElementById('invertLook');
 const planetDiameterEl = document.getElementById('planetDiameter');
 const planetDiameterValueEl = document.getElementById('planetDiameterValue');
 
@@ -194,7 +204,7 @@ const presets = {
         heightScale: 18.2,
         seaLevel: 0.53,
         smoothPasses: 20,
-        subdivisions: 60,
+        subdivisions: 128,
         iceCap: 0.15,
         plateDelta: 1.25,
         plateSizeVariance: 0.35,
@@ -216,7 +226,7 @@ const presets = {
         heightScale: 18.2,
         seaLevel: 0.53,
         smoothPasses: 20,
-        subdivisions: 60,
+        subdivisions: 128,
         iceCap: 0.12,
         plateDelta: 1.25,
         plateSizeVariance: 0.35,
@@ -238,7 +248,7 @@ const presets = {
         heightScale: 18.2,
         seaLevel: 0.53,
         smoothPasses: 20,
-        subdivisions: 60,
+        subdivisions: 128,
         iceCap: 0.15,
         plateDelta: 1.25,
         plateSizeVariance: 0.45,
@@ -299,10 +309,12 @@ function bindMobileControls() {
     };
 
     bindPad(movePadEl, (nx, ny) => {
-        set('forward', ny < -0.2);
-        set('backward', ny > 0.2);
-        set('left', nx < -0.2);
-        set('right', nx > 0.2);
+        const sens = Math.max(0.1, getLeftStickSensitivity());
+        const threshold = Math.max(0.1, 0.25 / sens);
+        set('forward', ny < -threshold);
+        set('backward', ny > threshold);
+        set('left', nx < -threshold);
+        set('right', nx > threshold);
     }, () => {
         set('forward', false);
         set('backward', false);
@@ -312,7 +324,10 @@ function bindMobileControls() {
 
     bindPad(lookPadEl, (nx, ny) => {
         // scale look
-        input?.addLookDelta(nx * 6, ny * 6);
+        const sx = Math.max(0.1, getLookSensitivityX());
+        const sy = Math.max(0.1, getLookSensitivityY());
+        const invert = isInvertLook() ? -1 : 1;
+        input?.addLookDelta(nx * 6 * sx, ny * 6 * sy * invert);
     }, () => {});
 
     mobileControlsEl.querySelectorAll('[data-trigger]').forEach((btn) => {
@@ -348,7 +363,9 @@ const waterUniforms = {
     deepColor: { value: new THREE.Color(0x08203f) },
     shallowColor: { value: new THREE.Color(0x154f8a) },
     opacity: { value: 0.65 },
-    fresnelPower: { value: 3.4 }
+    fresnelPower: { value: 3.4 },
+    iceCap: { value: 0.0 },
+    iceColor: { value: new THREE.Color(0xd9f1ff) }
 };
 const atmosphereUniforms = {
     time: { value: 0 },
@@ -376,6 +393,22 @@ function getPersonHeightUnits() {
     const metersPerUnit = defaultRadiusMeters / BASE_RADIUS_UNITS;
     const baseHeightUnits = PERSON_HEIGHT_M / metersPerUnit;
     return baseHeightUnits * getPlanetScale();
+}
+
+function getLeftStickSensitivity() {
+    const v = parseFloat(leftStickSensitivityEl?.value);
+    return Number.isFinite(v) ? v : 1;
+}
+function getLookSensitivityX() {
+    const v = parseFloat(lookSensitivityXEl?.value);
+    return Number.isFinite(v) ? v : 1;
+}
+function getLookSensitivityY() {
+    const v = parseFloat(lookSensitivityYEl?.value);
+    return Number.isFinite(v) ? v : 1;
+}
+function isInvertLook() {
+    return !!invertLookEl?.checked;
 }
 
 function updateOrbitBounds() {
@@ -409,6 +442,7 @@ function syncMobileVisibility() {
     if (!mobile) {
         mobileControlsEl.style.display = 'none';
         input?.clear();
+        if (reticleEl) reticleEl.style.display = 'none';
         return;
     }
     const inTiny = tinyControls.enabled;
@@ -418,6 +452,7 @@ function syncMobileVisibility() {
     const actionColumn = mobileControlsEl.querySelector('.action-column');
     if (actionColumn) actionColumn.style.display = inTiny ? 'grid' : 'none';
     if (surfaceOnlyBtn) surfaceOnlyBtn.style.display = inTiny ? 'none' : 'inline-flex';
+    if (reticleEl) reticleEl.style.display = 'block';
 }
 
 function getWalkSpeed() {
@@ -446,6 +481,9 @@ function updateRangeLabels() {
     if (planetDiameterEl && planetDiameterValueEl) {
         planetDiameterValueEl.textContent = Number(planetDiameterEl.value).toFixed(0);
     }
+    if (leftStickSensitivityEl && leftStickSensitivityValueEl) leftStickSensitivityValueEl.textContent = Number(leftStickSensitivityEl.value).toFixed(1);
+    if (lookSensitivityXEl && lookSensitivityXValueEl) lookSensitivityXValueEl.textContent = Number(lookSensitivityXEl.value).toFixed(1);
+    if (lookSensitivityYEl && lookSensitivityYValueEl) lookSensitivityYValueEl.textContent = Number(lookSensitivityYEl.value).toFixed(1);
 }
 
 function markDirty() {
@@ -494,7 +532,7 @@ function readSettings() {
         atmosphereAlpha: clamp(parseFloat(atmosphereAlphaEl.value) || 0.4, 0, 1),
         atmosphereColor: atmosphereColorEl.value || '#4da8ff',
         smoothPasses: Math.round(clamp(parseFloat(smoothPassesEl.value) || 0, 0, 40)),
-        subdivisions: Math.round(clamp(parseFloat(subdivisionsEl.value) || 6, 0, 512)),
+        subdivisions: Math.round(clamp(parseFloat(subdivisionsEl.value) || 128, 0, 512)),
         iceCap: clamp(parseFloat(iceCapEl.value) || 0.1, 0, 1),
         plateDelta: clamp(parseFloat(plateDeltaEl.value) || 1.25, 0, 2),
         faultType: faultTypeEl.value || 'ridge',
@@ -632,7 +670,7 @@ async function generateWorld(presetKey) {
         mesh.userData.settings = settings;
         mesh.rotation.x = 0.25;
         replacePlanet(mesh);
-        replaceWater(buildWaterMesh(settings.radius, settings.subdivisions, settings.seaLevel, settings.heightScale));
+        replaceWater(buildWaterMesh(settings.radius, settings.subdivisions, settings.seaLevel, settings.heightScale, settings.iceCap));
         replaceFreshwater(forge.createFreshwaterMesh(settings.radius, settings.heightScale, settings.seaLevel, settings.subdivisions));
         const sunDir = new THREE.Vector3().copy(dirLight.position).normalize();
         if (atmosphereToggleEl.checked) {
@@ -759,9 +797,10 @@ function buildStarfield() {
     return new THREE.Points(geometry, material);
 }
 
-function buildWaterMesh(radius, subdivisions, seaLevel, heightScale) {
+function buildWaterMesh(radius, subdivisions, seaLevel, heightScale, iceCap) {
     const waterRadius = radius + ((seaLevel - 0.5) * heightScale) + 0.01; // align to slider, tiny lift to avoid z-fight
     const geometry = new THREE.IcosahedronGeometry(waterRadius, Math.max(0, Math.floor(subdivisions)));
+    waterUniforms.iceCap.value = iceCap ?? 0;
     const material = new THREE.ShaderMaterial({
         uniforms: waterUniforms,
         transparent: true,
@@ -793,6 +832,8 @@ function buildWaterMesh(radius, subdivisions, seaLevel, heightScale) {
             uniform vec3 shallowColor;
             uniform float opacity;
             uniform float fresnelPower;
+            uniform float iceCap;
+            uniform vec3 iceColor;
             varying vec3 vWorldPos;
             varying vec3 vNormal;
             void main() {
@@ -801,7 +842,11 @@ function buildWaterMesh(radius, subdivisions, seaLevel, heightScale) {
                 float fresnel = pow(1.0 - max(dot(viewDir, normalize(vNormal)), 0.0), fresnelPower);
                 vec3 base = mix(shallowColor, deepColor, fresnel);
                 float sparkle = pow(fresnel, 4.0) * 0.3;
-                gl_FragColor = vec4(base + sparkle, opacity);
+                float pole = abs(normalize(vWorldPos).y);
+                float start = clamp(1.0 - iceCap, 0.0, 1.0);
+                float iceMask = smoothstep(start, start + 0.08, pole);
+                vec3 color = mix(base + sparkle, iceColor, iceMask);
+                gl_FragColor = vec4(color, opacity);
             }
         `
     });
@@ -889,7 +934,6 @@ function buildCloudMesh(radius, baseSubdivisions, sunDir, planetRadius, seaLevel
             uniform float planetRadius;
             uniform float seaLevel;
             uniform float heightScale;
-            uniform float speed;
             uniform float quantity;
             uniform float noiseScale;
             uniform float mode;
@@ -934,7 +978,7 @@ function buildCloudMesh(radius, baseSubdivisions, sunDir, planetRadius, seaLevel
             void main() {
                 vec3 pos = position;
                 vec3 dir = normalize(pos);
-                float base = fbm(dir * (noiseScale * 0.05) + windDir * time * speed);
+                float base = fbm(dir * (noiseScale * 0.05) + windDir * time);
                 float n = base;
                 if (mode > 0.5 && mode < 1.5) {
                     n = abs(base) * 2.0 - 1.0;
@@ -962,7 +1006,6 @@ function buildCloudMesh(radius, baseSubdivisions, sunDir, planetRadius, seaLevel
             uniform float planetRadius;
             uniform float seaLevel;
             uniform float heightScale;
-            uniform float speed;
             uniform float quantity;
             uniform float noiseScale;
             uniform float mode;
@@ -1008,7 +1051,7 @@ function buildCloudMesh(radius, baseSubdivisions, sunDir, planetRadius, seaLevel
                 vec3 dir = normalize(vWorld);
                 float day = clamp(dot(dir, normalize(sunDir)), 0.0, 1.0);
                 float lat = 1.0 - abs(dir.y);
-                float base = fbm(dir * (noiseScale * 0.02 + 0.6) + windDir * time * speed * 0.5 + vec3(0.0, time * 0.02, 0.0));
+                float base = fbm(dir * (noiseScale * 0.02 + 0.6) + windDir * time * 0.5 + vec3(0.0, time * 0.02, 0.0));
                 float n = base;
                 if (mode > 0.5 && mode < 1.5) {
                     n = abs(base) * 2.0 - 1.0;
@@ -1272,6 +1315,18 @@ if (hudToggleEl) {
 // Surface action global trigger
 document.addEventListener('surface', handleSurfaceAction);
 
+function toggleConfigPanel(show) {
+    if (!configPanelEl || !configToggleEl) return;
+    const next = show ?? configPanelEl.style.display !== 'block';
+    configPanelEl.style.display = next ? 'block' : 'none';
+    configToggleEl.setAttribute('aria-expanded', next.toString());
+    if (reticleEl) reticleEl.style.display = next ? 'none' : 'block';
+}
+
+if (configToggleEl) {
+    configToggleEl.addEventListener('click', () => toggleConfigPanel());
+}
+
 regenBtn.addEventListener('click', () => generateWorld(presetEl.value));
 
 const regenControls = [
@@ -1362,6 +1417,13 @@ addCloudLayerBtn.addEventListener('click', () => {
     rebuildClouds(new THREE.Vector3().copy(dirLight.position).normalize());
 });
 window.addEventListener('resize', onResize);
+
+// Config inputs
+[leftStickSensitivityEl, lookSensitivityXEl, lookSensitivityYEl].forEach((el) => {
+    if (!el) return;
+    el.addEventListener('input', updateRangeLabels);
+});
+if (invertLookEl) invertLookEl.addEventListener('change', updateRangeLabels);
 
 applyPreset(presetEl.value);
 generateWorld(presetEl.value);

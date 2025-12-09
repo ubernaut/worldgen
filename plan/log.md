@@ -8,3 +8,5 @@ llm instructions for this file: this file is a log of development. It's used to 
 - 2024-05-27: Upgraded mobile controls to twin analog pads (move + look), added look deltas and clear on exit/desktop, and disabled pointer lock on mobile to fix exiting first-person.
 - 2024-05-27: Moved action buttons between sticks with new Surface action (centers player on visible surface), restored orbit camera state on exiting Tiny mode, and improved InputRouter with surface action + twin-pad look delta.
 - 2024-05-27: Mobile overlay now hides when not in Tiny mode; only shows Surface button in overview, with action buttons moved above right stick; surface trigger now forces handler so it executes.
+- 2024-05-27: Refined swimming transitions to ignore shallow water, tighten entry/exit thresholds, and realign on exit to avoid tilted posture.
+- 2024-05-27: Added center reticle to indicate Surface target; it hides when config panel is open.

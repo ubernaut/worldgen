@@ -165,6 +165,38 @@
     details summary { color: var(--muted); }
     details > summary { list-style: none; }
     details > summary::-webkit-details-marker { display: none; }
+    /* Config */
+    #configToggle {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 20;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+    }
+    #configPanel {
+      position: fixed;
+      top: 60px;
+      right: 16px;
+      z-index: 19;
+      width: 220px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      display: none;
+    }
+    #configPanel h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.05em; }
+    #configPanel .field { margin-bottom: 10px; }
+    #configPanel label { color: var(--muted); font-size: 12px; display: block; margin-bottom: 6px; }
+    #configPanel input[type="range"] { width: 100%; accent-color: var(--accent-strong); }
+    #configPanel .value { font-size: 12px; color: var(--text); float: right; }
     /* Mobile controls */
     #mobileControls {
       position: fixed;
@@ -222,9 +254,43 @@
       pointer-events: auto;
       display: none;
     }
+    #reticle {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 14px;
+      height: 14px;
+      margin: -7px 0 0 -7px;
+      border: 2px solid rgba(255,255,255,0.6);
+      border-radius: 50%;
+      box-shadow: 0 0 12px rgba(255,255,255,0.35);
+      pointer-events: none;
+      z-index: 5;
+      display: none;
+    }
   </style>
 </head>
 <body>
+  <div id="reticle" aria-hidden="true"></div>
+  <button id="configToggle" aria-expanded="false" aria-controls="configPanel">⚙</button>
+  <div id="configPanel" role="region" aria-label="Controls config">
+    <h3>Controls</h3>
+    <div class="field">
+      <label for="leftStickSensitivity">Left stick sensitivity <span class="value" id="leftStickSensitivityValue">1.0</span></label>
+      <input id="leftStickSensitivity" type="range" min="0.5" max="2" step="0.1" value="1">
+    </div>
+    <div class="field">
+      <label for="lookSensitivityX">Horizontal look sensitivity <span class="value" id="lookSensitivityXValue">1.0</span></label>
+      <input id="lookSensitivityX" type="range" min="0.5" max="3" step="0.1" value="1">
+    </div>
+    <div class="field">
+      <label for="lookSensitivityY">Vertical look sensitivity <span class="value" id="lookSensitivityYValue">1.0</span></label>
+      <input id="lookSensitivityY" type="range" min="0.5" max="3" step="0.1" value="1">
+    </div>
+    <div class="field">
+      <label><input id="invertLook" type="checkbox"> Invert vertical look</label>
+    </div>
+  </div>
   <canvas id="viewport"></canvas>
   <div id="mobileControls" aria-hidden="true">
     <div class="stick left" id="movePad"></div>

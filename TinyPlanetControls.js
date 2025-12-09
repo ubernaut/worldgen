@@ -308,17 +308,24 @@ export class TinyPlanetControls {
             // Calculate physical heights
             const waterSurfaceHeight = settings.radius + (waterData.waterHeight - settings.seaLevel) * settings.heightScale;
             const currentRadius = this.player.position.length();
+            const inDeepWater = waterData.hasWater && waterData.waterMask > 0.15;
             
-            // Enter swim mode if in water and below surface (plus small margin)
-            // Or if already swimming, stay swimming until we jump out or walk onto land
-            if (waterData.hasWater && currentRadius < waterSurfaceHeight + 0.1) {
+            // Enter swim mode if in sufficiently deep water and below surface (plus small margin)
+            if (inDeepWater && currentRadius < waterSurfaceHeight + 0.05) {
                 if (!this.isSwimming) {
                     this.isSwimming = true;
                     this.verticalVelocity = 0;
                 }
-            } else if (this.isSwimming && currentRadius > waterSurfaceHeight + 0.5) {
-                // Exit swim mode if we fly/jump high enough out
+            } else if (this.isSwimming && (currentRadius > waterSurfaceHeight + 0.3 || !inDeepWater)) {
+                // Exit swim mode if we rise above surface or leave water
                 this.isSwimming = false;
+                // Re-align to gravity and reset pitch to avoid tilted exit
+                const up = this.player.position.clone().normalize();
+                const realign = new THREE.Quaternion().setFromUnitVectors(this.player.up, up);
+                this.player.quaternion.premultiply(realign);
+                this.player.up.copy(up);
+                this.camera.rotation.x = 0;
+                this.verticalVelocity = 0;
             }
         }
 
