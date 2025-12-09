@@ -297,9 +297,16 @@ export class TinyPlanetControls {
         }
 
         // Check for water
+        let isFrozen = false;
         if (this.planetMesh && this.planetMesh.userData.forge) {
             const forge = this.planetMesh.userData.forge;
             const settings = this.planetMesh.userData.settings;
+
+            // Check for ice (World Y based)
+            this.player.getWorldPosition(this.dummyVec);
+            const pole = Math.abs(this.dummyVec.normalize().y);
+            const iceStart = Math.max(0.0, Math.min(1.0, 1.0 - settings.iceCap));
+            isFrozen = pole > iceStart;
             
             // Get current position info
             const dir = this.player.position.clone().normalize();
@@ -311,13 +318,14 @@ export class TinyPlanetControls {
             const inDeepWater = waterData.hasWater && waterData.waterMask > 0.15;
             
             // Enter swim mode if in sufficiently deep water and below surface (plus small margin)
-            if (inDeepWater && currentRadius < waterSurfaceHeight + 0.05) {
+            // But NOT if it's frozen
+            if (!isFrozen && inDeepWater && currentRadius < waterSurfaceHeight + 0.05) {
                 if (!this.isSwimming) {
                     this.isSwimming = true;
                     this.verticalVelocity = 0;
                 }
-            } else if (this.isSwimming && (currentRadius > waterSurfaceHeight + 0.3 || !inDeepWater)) {
-                // Exit swim mode if we rise above surface or leave water
+            } else if (this.isSwimming && (currentRadius > waterSurfaceHeight + 0.3 || !inDeepWater || isFrozen)) {
+                // Exit swim mode if we rise above surface or leave water or enter ice
                 this.isSwimming = false;
                 // Re-align to gravity and reset pitch to avoid tilted exit
                 const up = this.player.position.clone().normalize();
@@ -398,6 +406,31 @@ export class TinyPlanetControls {
                 
                 // Target Height in GEOMETRY Units (Local Space)
                 targetHeight = settings.radius + (rawHeight - settings.seaLevel) * settings.heightScale;
+
+                // Check for ice walking
+                this.player.getWorldPosition(this.dummyVec);
+                const pole = Math.abs(this.dummyVec.normalize().y);
+                const iceStart = Math.max(0.0, Math.min(1.0, 1.0 - settings.iceCap));
+                
+                if (pole > iceStart) {
+                    // Check Global Ocean
+                    // Match buildWaterMesh logic in index.js: radius + ((seaLevel - 0.5) * heightScale)
+                    const oceanRadius = settings.radius + (settings.seaLevel - 0.5) * settings.heightScale;
+                    
+                    if (targetHeight < oceanRadius) {
+                        targetHeight = oceanRadius;
+                    }
+
+                    // Check Freshwater
+                    const waterData = forge.getWaterDataAt(dir);
+                    if (waterData.hasWater) {
+                        const waterSurfaceHeight = settings.radius + (waterData.waterHeight - settings.seaLevel) * settings.heightScale;
+                        // If ice is higher than terrain (e.g. over ocean/lake), walk on it
+                        if (waterSurfaceHeight > targetHeight) {
+                            targetHeight = waterSurfaceHeight;
+                        }
+                    }
+                }
             } else {
                 // Fallback
                 targetHeight = this.planetRadius;

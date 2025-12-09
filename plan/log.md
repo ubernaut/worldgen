@@ -11,3 +11,4 @@ llm instructions for this file: this file is a log of development. It's used to 
 - 2024-05-27: Refined swimming transitions to ignore shallow water, tighten entry/exit thresholds, and realign on exit to avoid tilted posture.
 - 2024-05-27: Added center reticle to indicate Surface target; it hides when config panel is open.
 - 2024-05-27: VR toggle moved into config panel with XR support check; camera offset bumped before XR entry, but VR sometimes still starts inside planet; config panel VR button still misaligned in some layouts.
+- 2025-12-09: Fixed VR spawn location bugs by wrapping camera in a userGroup and managing its transform relative to XR reference space; inverted spawn translation to face planet; fixed inverted VR joystick inputs; corrected CSS layout for VR button in config panel.
