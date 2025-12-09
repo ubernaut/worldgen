@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Planet Forge Demo</title>
+  <link rel="icon" type="image/png" href="./favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet">
@@ -164,10 +165,79 @@
     details summary { color: var(--muted); }
     details > summary { list-style: none; }
     details > summary::-webkit-details-marker { display: none; }
+    /* Mobile controls */
+    #mobileControls {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+    }
+    @media (max-width: 768px) {
+      #mobileControls { display: block; }
+    }
+    .stick {
+      position: absolute;
+      bottom: 16px;
+      width: 140px;
+      height: 140px;
+      pointer-events: auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 6px;
+      padding: 10px;
+      border-radius: 999px;
+      background: rgba(7, 12, 24, 0.5);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(6px);
+    }
+    .stick button, .action-btn {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: background 0.12s ease, transform 0.08s ease;
+    }
+    .stick button:active, .action-btn:active { transform: scale(0.96); background: rgba(255,255,255,0.16); }
+    .stick.left { left: 16px; }
+    .stick.right { right: 16px; }
+    .action-column {
+      position: absolute;
+      right: 18px;
+      bottom: 170px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(72px, 1fr));
+      gap: 8px;
+      pointer-events: auto;
+      max-width: 220px;
+    }
+    #surfaceOnly {
+      position: absolute;
+      right: 18px;
+      bottom: 140px;
+      pointer-events: auto;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <canvas id="viewport"></canvas>
+  <div id="mobileControls" aria-hidden="true">
+    <div class="stick left" id="movePad"></div>
+    <div class="stick right" id="lookPad"></div>
+    <button class="action-btn" id="surfaceOnly" data-trigger="surface">Surface</button>
+    <div class="action-column">
+      <button class="action-btn" data-trigger="jump">Jump</button>
+      <button class="action-btn" data-trigger="flyToggle">Fly</button>
+      <button class="action-btn" data-trigger="surface">Surface</button>
+      <button class="action-btn" data-trigger="exit">Exit</button>
+      <button class="action-btn" data-action="run">Run</button>
+    </div>
+  </div>
   <div id="hud">
     <div class="hud-header">
       <div class="hud-title">

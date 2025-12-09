@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js';
 import { TinyPlanetControls } from './TinyPlanetControls.js';
 import { PlanetForge } from './worldgen.js';
+import { InputRouter } from './InputRouter.js';
 
 const canvas = document.getElementById('viewport');
 const hudEl = document.getElementById('hud');
@@ -58,12 +59,18 @@ const cloudResolutionValueEl = document.getElementById('cloudResolutionValue');
 const cloudShaderEl = document.getElementById('cloudShader');
 const cloudLayersEl = document.getElementById('cloudLayers');
 const addCloudLayerBtn = document.getElementById('addCloudLayer');
+const movePadEl = document.getElementById('movePad');
+const lookPadEl = document.getElementById('lookPad');
+const mobileControlsEl = document.getElementById('mobileControls');
+const surfaceOnlyBtn = document.getElementById('surfaceOnly');
 const planetDiameterEl = document.getElementById('planetDiameter');
 const planetDiameterValueEl = document.getElementById('planetDiameterValue');
 
 const DEFAULT_DIAMETER_KM = 1000;
 const PERSON_HEIGHT_M = 2;
 const BASE_RADIUS_UNITS = 10;
+
+const isMobileDevice = () => window.matchMedia('(max-width: 768px)').matches || /Mobi|Android|iP(ad|hone|od)|IEMobile|BlackBerry|Kindle|Silk|Opera Mini/i.test(navigator.userAgent || '');
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, canvas, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -80,15 +87,28 @@ scene.add(planetGroup);
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
 camera.position.set(0, 10, 28);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
+const controls = new TrackballControls(camera, renderer.domElement);
+controls.rotateSpeed = 1.0;
+controls.zoomSpeed = 1.2;
+controls.panSpeed = 0.8;
+controls.dynamicDampingFactor = 0.15;
+controls.noPan = true;
 controls.minDistance = 12;
 controls.maxDistance = 60;
+
+const input = new InputRouter();
+input.setMode(isMobileDevice() ? 'mobile' : 'desktop');
 
 const tinyControls = new TinyPlanetControls(camera, renderer.domElement, scene, () => {
     controls.enabled = true;
     setStatus('');
-});
+    if (savedOrbitState) {
+        controls.target.copy(savedOrbitState.target);
+        camera.position.copy(savedOrbitState.position);
+        savedOrbitState = null;
+    }
+    updateOrbitBounds();
+}, input);
 const clock = new THREE.Clock();
 
 scene.add(new THREE.HemisphereLight(0xd8e7ff, 0x0a0c12, 0.9));
@@ -107,6 +127,7 @@ let atmosphere = null;
 let clouds = [];
 let cloudLayerSettings = [];
 let lastPlanetSettings = null;
+let savedOrbitState = null;
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
@@ -127,6 +148,10 @@ window.addEventListener('mousedown', (event) => {
         
         // Raycast against the planet mesh
         if (planet) {
+            savedOrbitState = {
+                position: camera.position.clone(),
+                target: controls.target.clone()
+            };
             const intersects = raycaster.intersectObject(planet, false);
             if (intersects.length > 0) {
                 const point = intersects[0].point;
@@ -137,6 +162,25 @@ window.addEventListener('mousedown', (event) => {
         }
     }
 });
+
+function handleSurfaceAction() {
+    if (tinyControls.enabled) {
+        tinyControls.snapToSurface();
+        return;
+    }
+    if (!planet) return;
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hit = raycaster.intersectObject(planet, false);
+    if (hit.length) {
+        savedOrbitState = {
+            position: camera.position.clone(),
+            target: controls.target.clone()
+        };
+        tinyControls.enter(hit[0].point, planet);
+        controls.enabled = false;
+        setStatus('Mode: Tiny Planet Explorer (ESC to exit)');
+    }
+}
 
 const presets = {
     fast: {
@@ -211,8 +255,6 @@ const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
 const setStatus = (text) => {
     statusEl.textContent = text;
 };
-const isMobileDevice = () => window.matchMedia('(max-width: 768px)').matches || /Mobi|Android|iP(ad|hone|od)|IEMobile|BlackBerry|Kindle|Silk|Opera Mini/i.test(navigator.userAgent || '');
-
 function setHudCollapsed(collapsed) {
     if (!hudEl || !hudToggleEl || !hudContentEl) return;
     hudEl.classList.toggle('collapsed', collapsed);
@@ -222,6 +264,84 @@ function setHudCollapsed(collapsed) {
 }
 
 setHudCollapsed(isMobileDevice());
+
+function bindMobileControls() {
+    if (!mobileControlsEl || !movePadEl || !lookPadEl) return;
+    const set = (action, pressed) => input?.setAction(action, pressed);
+    const trigger = (name) => input?.trigger(name);
+    const bindPad = (padEl, onMove, onRelease) => {
+        let active = false;
+        let rect = null;
+        const updateRect = () => { rect = padEl.getBoundingClientRect(); };
+        const handle = (e) => {
+            if (!rect) updateRect();
+            const point = e.touches ? e.touches[0] : e;
+            const x = point.clientX - rect.left - rect.width / 2;
+            const y = point.clientY - rect.top - rect.height / 2;
+            const maxR = Math.min(rect.width, rect.height) / 2;
+            const dx = Math.max(-maxR, Math.min(maxR, x));
+            const dy = Math.max(-maxR, Math.min(maxR, y));
+            const nx = dx / maxR;
+            const ny = dy / maxR;
+            onMove(nx, ny);
+        };
+        const stop = () => {
+            active = false;
+            onRelease();
+        };
+        padEl.addEventListener('pointerdown', (e) => { e.preventDefault(); active = true; updateRect(); handle(e); });
+        window.addEventListener('pointermove', (e) => { if (active) { e.preventDefault(); handle(e); } });
+        window.addEventListener('pointerup', (e) => { if (active) { e.preventDefault(); stop(); } });
+        padEl.addEventListener('touchstart', (e) => { active = true; updateRect(); handle(e); }, { passive: false });
+        padEl.addEventListener('touchmove', (e) => { if (active) handle(e); }, { passive: false });
+        padEl.addEventListener('touchend', (e) => { if (active) { stop(); } }, { passive: false });
+        padEl.addEventListener('touchcancel', (e) => { if (active) { stop(); } }, { passive: false });
+    };
+
+    bindPad(movePadEl, (nx, ny) => {
+        set('forward', ny < -0.2);
+        set('backward', ny > 0.2);
+        set('left', nx < -0.2);
+        set('right', nx > 0.2);
+    }, () => {
+        set('forward', false);
+        set('backward', false);
+        set('left', false);
+        set('right', false);
+    });
+
+    bindPad(lookPadEl, (nx, ny) => {
+        // scale look
+        input?.addLookDelta(nx * 6, ny * 6);
+    }, () => {});
+
+    mobileControlsEl.querySelectorAll('[data-trigger]').forEach((btn) => {
+        const action = btn.getAttribute('data-trigger');
+        const fire = () => {
+            trigger(action);
+            if (action === 'surface') handleSurfaceAction();
+        };
+        btn.addEventListener('pointerdown', (e) => { e.preventDefault(); fire(); });
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); fire(); }, { passive: false });
+    });
+    mobileControlsEl.querySelectorAll('.action-btn[data-action]').forEach((btn) => {
+        const action = btn.getAttribute('data-action');
+        const down = () => set(action, true);
+        const up = () => set(action, false);
+        btn.addEventListener('pointerdown', (e) => { e.preventDefault(); down(); });
+        btn.addEventListener('pointerup', (e) => { e.preventDefault(); up(); });
+        btn.addEventListener('pointerleave', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); down(); }, { passive: false });
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); up(); }, { passive: false });
+        btn.addEventListener('touchcancel', (e) => { e.preventDefault(); up(); }, { passive: false });
+    });
+
+    if (surfaceOnlyBtn) {
+        surfaceOnlyBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); trigger('surface'); });
+        surfaceOnlyBtn.addEventListener('touchstart', (e) => { e.preventDefault(); trigger('surface'); }, { passive: false });
+    }
+}
 
 const waterUniforms = {
     time: { value: 0 },
@@ -281,6 +401,23 @@ function applyPlanetScale() {
     const scale = getPlanetScale();
     planetGroup.scale.setScalar(scale);
     updateOrbitBounds();
+}
+
+function syncMobileVisibility() {
+    if (!mobileControlsEl) return;
+    const mobile = isMobileDevice();
+    if (!mobile) {
+        mobileControlsEl.style.display = 'none';
+        input?.clear();
+        return;
+    }
+    const inTiny = tinyControls.enabled;
+    mobileControlsEl.style.display = 'block';
+    if (movePadEl) movePadEl.style.display = inTiny ? 'grid' : 'none';
+    if (lookPadEl) lookPadEl.style.display = inTiny ? 'grid' : 'none';
+    const actionColumn = mobileControlsEl.querySelector('.action-column');
+    if (actionColumn) actionColumn.style.display = inTiny ? 'grid' : 'none';
+    if (surfaceOnlyBtn) surfaceOnlyBtn.style.display = inTiny ? 'none' : 'inline-flex';
 }
 
 function getWalkSpeed() {
@@ -1086,6 +1223,10 @@ function onResize() {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
+    if (input) {
+        input.setMode(isMobileDevice() ? 'mobile' : 'desktop');
+    }
+    syncMobileVisibility();
 }
 
 function animate() {
@@ -1102,6 +1243,7 @@ function animate() {
         }
         controls.update();
     }
+    syncMobileVisibility();
 
     if (water) waterUniforms.time.value += 0.016;
     if (freshwater) freshwater.material.uniforms.time.value += 0.016;
@@ -1126,6 +1268,9 @@ if (hudToggleEl) {
         setHudCollapsed(!hudEl.classList.contains('collapsed'));
     });
 }
+
+// Surface action global trigger
+document.addEventListener('surface', handleSurfaceAction);
 
 regenBtn.addEventListener('click', () => generateWorld(presetEl.value));
 
@@ -1221,4 +1366,5 @@ window.addEventListener('resize', onResize);
 applyPreset(presetEl.value);
 generateWorld(presetEl.value);
 renderCloudLayerControls();
+bindMobileControls();
 animate();

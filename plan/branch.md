@@ -9,6 +9,8 @@ create input multiplexer abstraction to help map controls for mobile/vr/desktop 
 add mobile twinstick controls + buttons for any actions (fly/walk/return to trackball controls). 
 detect and switch to mobile controls dynamically
 
+freeze all water in polar reigons. 
+
 add VR mode and controls. 
 
 fix swimming and transition between swimming to walking vice versa
@@ -21,3 +23,5 @@ add equivalent mobile control buttons for each input.
 recent progress:
 
 - HUD now collapses and auto-collapses on mobile to free viewport space for upcoming touch controls.
+- Input router scaffold added (desktop keymap wired, mobile/desktop mode hook); TinyPlanetControls now reads shared action state, paving the way for touch/VR mappings.
+- TrackballControls now replace OrbitControls for overview; added basic mobile overlay buttons (move/run/jump/fly/exit) wired into the input router and auto-shown on small screens.

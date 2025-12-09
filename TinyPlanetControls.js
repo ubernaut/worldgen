@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 
 export class TinyPlanetControls {
-    constructor(camera, domElement, scene, onExit) {
+    constructor(camera, domElement, scene, onExit, inputMultiplexer = null) {
         this.camera = camera;
         this.domElement = domElement;
         this.scene = scene;
         this.onExitCallback = onExit;
+        this.externalInput = inputMultiplexer;
         this.planetMesh = null;
         this.planetGroup = null;
+        this.surfaceRay = new THREE.Raycaster();
 
         // Configuration
         this.planetRadius = 10; // Base radius from worldgen
@@ -96,8 +98,11 @@ export class TinyPlanetControls {
         this.verticalVelocity = 0;
         this.isFlying = false;
 
-        // Lock pointer
-        this.domElement.requestPointerLock();
+        // Lock pointer (desktop only)
+        const isMobile = /Mobi|Android|iP(ad|hone|od)/i.test(navigator.userAgent || '');
+        if (!isMobile && this.domElement.requestPointerLock) {
+            this.domElement.requestPointerLock();
+        }
         
         this.addListeners();
     }
@@ -121,18 +126,26 @@ export class TinyPlanetControls {
         if (this.onExitCallback) {
             this.onExitCallback();
         }
+
+        if (this.externalInput) {
+            this.externalInput.clear();
+        }
     }
 
     addListeners() {
-        document.addEventListener('keydown', this.onKeyDown);
-        document.addEventListener('keyup', this.onKeyUp);
+        if (!this.externalInput) {
+            document.addEventListener('keydown', this.onKeyDown);
+            document.addEventListener('keyup', this.onKeyUp);
+        }
         document.addEventListener('mousemove', this.onMouseMove);
         document.addEventListener('pointerlockchange', this.onPointerLockChange);
     }
 
     removeListeners() {
-        document.removeEventListener('keydown', this.onKeyDown);
-        document.removeEventListener('keyup', this.onKeyUp);
+        if (!this.externalInput) {
+            document.removeEventListener('keydown', this.onKeyDown);
+            document.removeEventListener('keyup', this.onKeyUp);
+        }
         document.removeEventListener('mousemove', this.onMouseMove);
         document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     }
@@ -220,8 +233,68 @@ export class TinyPlanetControls {
         }
     }
 
+    snapToSurface() {
+        if (!this.planetMesh || !this.planetMesh.userData?.forge || !this.planetMesh.userData?.settings) return;
+        const forge = this.planetMesh.userData.forge;
+        const settings = this.planetMesh.userData.settings;
+        // Raycast from camera through center
+        this.surfaceRay.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+        const hit = this.surfaceRay.intersectObject(this.planetMesh, false);
+        if (!hit.length) return;
+        const pointWorld = hit[0].point.clone();
+        const dirLocal = pointWorld.clone();
+        this.planetMesh.worldToLocal(dirLocal);
+        const dir = dirLocal.normalize();
+        const h = forge.getHeightAt(dir);
+        const targetRadius = settings.radius + (h - settings.seaLevel) * settings.heightScale + this.playerHeight;
+        const newPos = dir.clone().multiplyScalar(targetRadius + 0.2);
+        this.player.position.copy(newPos);
+        // Align up
+        const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+        this.player.quaternion.copy(quat);
+        this.player.up.copy(dir);
+        this.camera.rotation.set(0,0,0);
+        this.velocity.set(0,0,0);
+        this.verticalVelocity = 0;
+    }
+
     update(delta) {
         if (!this.enabled) return;
+
+        if (this.externalInput) {
+            const a = this.externalInput.getState();
+            this.moveForward = !!a.forward;
+            this.moveBackward = !!a.backward;
+            this.moveLeft = !!a.left;
+            this.moveRight = !!a.right;
+            this.moveUp = !!a.up;
+            this.moveDown = !!a.down;
+            this.isRunning = !!a.run;
+            this.rollLeft = !!a.rollLeft;
+            this.rollRight = !!a.rollRight;
+            if (this.externalInput.consume('flyToggle')) {
+                this.toggleFlight();
+            }
+            if (this.externalInput.consume('exit')) {
+                this.exit();
+                return;
+            }
+            if (this.externalInput.consume('surface')) {
+                this.snapToSurface();
+            }
+            if (!this.isFlying && !this.isSwimming && this.canJump && this.externalInput.consume('jump')) {
+                this.verticalVelocity = this.jumpForce;
+                this.canJump = false;
+            }
+            const look = this.externalInput.consumeLookDelta();
+            if (Math.abs(look.x) > 1e-4 || Math.abs(look.y) > 1e-4) {
+                const yaw = -look.x * 0.01;
+                const pitch = -look.y * 0.01;
+                this.player.rotateY(yaw);
+                this.camera.rotateX(pitch);
+                this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
+            }
+        }
 
         // Check for water
         if (this.planetMesh && this.planetMesh.userData.forge) {
