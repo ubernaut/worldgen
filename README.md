@@ -1,4 +1,4 @@
-# Worldgen (Planet Forge)
+# Worldgen (Planet Gen)
 
 An interactive WebGL planet generator that simulates plate tectonics, hydraulic erosion, and atmospheric/cloud layers. Build and orbit procedural worlds, then drop into a Tiny Planet first-person explorer to walk, swim, or fly across the surface.
 
