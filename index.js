@@ -4,11 +4,15 @@ import { TinyPlanetControls } from './TinyPlanetControls.js';
 import { PlanetForge } from './worldgen.js';
 
 const canvas = document.getElementById('viewport');
+const hudEl = document.getElementById('hud');
+const hudToggleEl = document.getElementById('hudToggle');
+const hudContentEl = document.getElementById('hudContent');
 const statusEl = document.getElementById('status');
 const presetEl = document.getElementById('preset');
 const regenBtn = document.getElementById('regen');
 const resolutionEl = document.getElementById('resolution');
 const platesEl = document.getElementById('plates');
+const plateSizeVarianceEl = document.getElementById('plateSizeVariance');
 const jitterEl = document.getElementById('jitter');
 const heightScaleEl = document.getElementById('heightScale');
 const iterationsEl = document.getElementById('iterations');
@@ -20,6 +24,7 @@ const subdivisionsEl = document.getElementById('subdivisions');
 const iceCapEl = document.getElementById('iceCap');
 const plateDeltaEl = document.getElementById('plateDelta');
 const faultTypeEl = document.getElementById('faultType');
+const desymmetrizeTilingEl = document.getElementById('desymmetrizeTiling');
 const atmosphereEl = document.getElementById('atmosphere');
 const jitterValueEl = document.getElementById('jitterValue');
 const heightScaleValueEl = document.getElementById('heightScaleValue');
@@ -30,6 +35,7 @@ const smoothPassesValueEl = document.getElementById('smoothPassesValue');
 const subdivisionsValueEl = document.getElementById('subdivisionsValue');
 const iceCapValueEl = document.getElementById('iceCapValue');
 const plateDeltaValueEl = document.getElementById('plateDeltaValue');
+const plateSizeVarianceValueEl = document.getElementById('plateSizeVarianceValue');
 const atmosphereValueEl = document.getElementById('atmosphereValue');
 const atmosphereHeightEl = document.getElementById('atmosphereHeight');
 const atmosphereHeightValueEl = document.getElementById('atmosphereHeightValue');
@@ -134,48 +140,8 @@ window.addEventListener('mousedown', (event) => {
 
 const presets = {
     fast: {
-    resolution: 384,
-    numPlates: 16,
-    jitter: 0.6,
-    iterations: 80000,
-    erosionRate: 0.36,
-    evaporation: 0.5,
-    radius: 10,
-    heightScale: 18.2,
-    seaLevel: 0.53,
-    smoothPasses: 20,
-    subdivisions: 60,
-    iceCap: 0.15,
-    plateDelta: 1.25,
-    atmosphere: 0.35,
-    atmosphereHeight: 0.5,
-    atmosphereAlpha: 0.4,
-    atmosphereColor: '#4da8ff',
-    faultType: 'ridge'
-},
-    balanced: {
         resolution: 384,
-        numPlates: 16,
-        jitter: 0.6,
-        iterations: 80000,
-        erosionRate: 0.36,
-        evaporation: 0.5,
-        radius: 10,
-        heightScale: 18.2,
-        seaLevel: 0.53,
-        smoothPasses: 20,
-        subdivisions: 60,
-        iceCap: 0.12,
-        plateDelta: 1.25,
-        atmosphere: 0.35,
-        atmosphereHeight: 0.5,
-        atmosphereAlpha: 0.4,
-        atmosphereColor: '#4da8ff',
-        faultType: 'mixed'
-    },
-    high: {
-        resolution: 384,
-        numPlates: 16,
+        numPlates: 9,
         jitter: 0.6,
         iterations: 80000,
         erosionRate: 0.36,
@@ -187,6 +153,52 @@ const presets = {
         subdivisions: 60,
         iceCap: 0.15,
         plateDelta: 1.25,
+        plateSizeVariance: 0.35,
+        desymmetrizeTiling: true,
+        atmosphere: 0.35,
+        atmosphereHeight: 0.5,
+        atmosphereAlpha: 0.4,
+        atmosphereColor: '#4da8ff',
+        faultType: 'ridge'
+    },
+    balanced: {
+        resolution: 384,
+        numPlates: 9,
+        jitter: 0.6,
+        iterations: 80000,
+        erosionRate: 0.36,
+        evaporation: 0.5,
+        radius: 10,
+        heightScale: 18.2,
+        seaLevel: 0.53,
+        smoothPasses: 20,
+        subdivisions: 60,
+        iceCap: 0.12,
+        plateDelta: 1.25,
+        plateSizeVariance: 0.35,
+        desymmetrizeTiling: true,
+        atmosphere: 0.35,
+        atmosphereHeight: 0.5,
+        atmosphereAlpha: 0.4,
+        atmosphereColor: '#4da8ff',
+        faultType: 'mixed'
+    },
+    high: {
+        resolution: 384,
+        numPlates: 9,
+        jitter: 0.6,
+        iterations: 80000,
+        erosionRate: 0.36,
+        evaporation: 0.5,
+        radius: 10,
+        heightScale: 18.2,
+        seaLevel: 0.53,
+        smoothPasses: 20,
+        subdivisions: 60,
+        iceCap: 0.15,
+        plateDelta: 1.25,
+        plateSizeVariance: 0.45,
+        desymmetrizeTiling: true,
         atmosphere: 0.35,
         atmosphereHeight: 0.5,
         atmosphereAlpha: 0.4,
@@ -199,6 +211,17 @@ const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
 const setStatus = (text) => {
     statusEl.textContent = text;
 };
+const isMobileDevice = () => window.matchMedia('(max-width: 768px)').matches || /Mobi|Android|iP(ad|hone|od)|IEMobile|BlackBerry|Kindle|Silk|Opera Mini/i.test(navigator.userAgent || '');
+
+function setHudCollapsed(collapsed) {
+    if (!hudEl || !hudToggleEl || !hudContentEl) return;
+    hudEl.classList.toggle('collapsed', collapsed);
+    hudToggleEl.setAttribute('aria-expanded', (!collapsed).toString());
+    hudContentEl.setAttribute('aria-hidden', collapsed.toString());
+    hudToggleEl.textContent = collapsed ? 'Show controls' : 'Hide controls';
+}
+
+setHudCollapsed(isMobileDevice());
 
 const waterUniforms = {
     time: { value: 0 },
@@ -219,6 +242,7 @@ function clamp(v, min, max) {
 }
 
 function getPlanetDiameterKm() {
+    if (!planetDiameterEl) return DEFAULT_DIAMETER_KM;
     const value = parseFloat(planetDiameterEl.value);
     return clamp(Number.isFinite(value) ? value : DEFAULT_DIAMETER_KM, 1, 1000);
 }
@@ -275,13 +299,16 @@ function updateRangeLabels() {
     subdivisionsValueEl.textContent = Number(subdivisionsEl.value).toFixed(0);
     iceCapValueEl.textContent = Number(iceCapEl.value).toFixed(2);
     plateDeltaValueEl.textContent = Number(plateDeltaEl.value).toFixed(2);
+    plateSizeVarianceValueEl.textContent = Number(plateSizeVarianceEl.value).toFixed(2);
     atmosphereAlphaValueEl.textContent = Number(atmosphereAlphaEl.value).toFixed(2);
     cloudAlphaValueEl.textContent = Number(cloudAlphaEl.value).toFixed(2);
     cloudSpeedValueEl.textContent = Number(cloudSpeedEl.value).toFixed(2);
     cloudQuantityValueEl.textContent = Number(cloudQuantityEl.value).toFixed(2);
     cloudHeightValueEl.textContent = Number(cloudHeightEl.value).toFixed(2);
     cloudResolutionValueEl.textContent = Number(cloudResolutionEl.value).toFixed(0);
-    planetDiameterValueEl.textContent = Number(planetDiameterEl.value).toFixed(0);
+    if (planetDiameterEl && planetDiameterValueEl) {
+        planetDiameterValueEl.textContent = Number(planetDiameterEl.value).toFixed(0);
+    }
 }
 
 function markDirty() {
@@ -293,16 +320,18 @@ function applyPreset(key) {
     presetEl.value = key;
     resolutionEl.value = preset.resolution;
     platesEl.value = preset.numPlates;
+    plateSizeVarianceEl.value = preset.plateSizeVariance ?? 0.35;
+    desymmetrizeTilingEl.checked = preset.desymmetrizeTiling ?? true;
     jitterEl.value = preset.jitter;
     heightScaleEl.value = preset.heightScale;
     iterationsEl.value = preset.iterations;
     erosionRateEl.value = preset.erosionRate;
     evaporationEl.value = preset.evaporation;
-        seaLevelEl.value = preset.seaLevel ?? 0.53;
-        atmosphereEl.value = preset.atmosphere ?? 0.35;
-        atmosphereHeightEl.value = preset.atmosphereHeight ?? 0.5;
-        atmosphereAlphaEl.value = preset.atmosphereAlpha ?? 0.4;
-        atmosphereColorEl.value = preset.atmosphereColor || '#4da8ff';
+    seaLevelEl.value = preset.seaLevel ?? 0.53;
+    atmosphereEl.value = preset.atmosphere ?? 0.35;
+    atmosphereHeightEl.value = preset.atmosphereHeight ?? 0.5;
+    atmosphereAlphaEl.value = preset.atmosphereAlpha ?? 0.4;
+    atmosphereColorEl.value = preset.atmosphereColor || '#4da8ff';
     smoothPassesEl.value = preset.smoothPasses ?? 20;
     subdivisionsEl.value = preset.subdivisions ?? 60;
     iceCapEl.value = preset.iceCap ?? 0.15;
@@ -314,7 +343,9 @@ function applyPreset(key) {
 function readSettings() {
     return {
         resolution: clamp(parseInt(resolutionEl.value, 10) || 256, 64, 4096),
-        numPlates: clamp(parseInt(platesEl.value, 10) || 10, 4, 400),
+        numPlates: clamp(parseInt(platesEl.value, 10) || 9, 4, 400),
+        plateSizeVariance: clamp(parseFloat(plateSizeVarianceEl.value) || 0, 0, 2),
+        desymmetrizeTiling: Boolean(desymmetrizeTilingEl?.checked),
         jitter: clamp(parseFloat(jitterEl.value) || 0.5, 0, 1),
         iterations: clamp(parseInt(iterationsEl.value, 10) || 50000, 1000, 2000000),
         erosionRate: clamp(parseFloat(erosionRateEl.value) || 0.1, 0.001, 2),
@@ -337,6 +368,8 @@ function readSettings() {
 function writeSettings(settings) {
     resolutionEl.value = settings.resolution;
     platesEl.value = settings.numPlates;
+    plateSizeVarianceEl.value = settings.plateSizeVariance;
+    if (desymmetrizeTilingEl) desymmetrizeTilingEl.checked = !!settings.desymmetrizeTiling;
     jitterEl.value = settings.jitter;
     iterationsEl.value = settings.iterations;
     erosionRateEl.value = settings.erosionRate;
@@ -407,6 +440,8 @@ async function generateWorld(presetKey) {
     presetEl.disabled = true;
     resolutionEl.disabled = true;
     platesEl.disabled = true;
+    plateSizeVarianceEl.disabled = true;
+    desymmetrizeTilingEl.disabled = true;
     jitterEl.disabled = true;
     heightScaleEl.disabled = true;
     iterationsEl.disabled = true;
@@ -433,7 +468,9 @@ async function generateWorld(presetKey) {
             jitter: settings.jitter,
             oceanFloor: 0.2,
             plateDelta: settings.plateDelta,
-            faultType: settings.faultType
+            faultType: settings.faultType,
+            plateSizeVariance: settings.plateSizeVariance,
+            desymmetrizeTiling: settings.desymmetrizeTiling
         });
 
         setStatus(`Erosion: ${settings.iterations.toLocaleString()} droplets`);
@@ -479,6 +516,8 @@ async function generateWorld(presetKey) {
         presetEl.disabled = false;
         resolutionEl.disabled = false;
         platesEl.disabled = false;
+        plateSizeVarianceEl.disabled = false;
+        desymmetrizeTilingEl.disabled = false;
         jitterEl.disabled = false;
         heightScaleEl.disabled = false;
         iterationsEl.disabled = false;
@@ -1067,11 +1106,13 @@ function animate() {
     if (water) waterUniforms.time.value += 0.016;
     if (freshwater) freshwater.material.uniforms.time.value += 0.016;
     if (clouds.length) {
+        const dt = Math.min(delta, 0.25); // avoid huge jumps after tab inactivity
         for (const mesh of clouds) {
             const u = mesh.userData.uniforms;
             const s = mesh.userData.settings;
-            u.time.value += 0.008 * (s.speed || 1);
-            const windAngle = u.time.value * 0.2 * (s.speed || 1);
+            const speed = s.speed || 1;
+            u.time.value += dt * speed;
+            const windAngle = u.time.value * 0.2;
             u.windDir.value.set(Math.sin(windAngle), 0, Math.cos(windAngle)).normalize();
         }
     }
@@ -1080,11 +1121,19 @@ function animate() {
     renderer.render(scene, camera);
 }
 
+if (hudToggleEl) {
+    hudToggleEl.addEventListener('click', () => {
+        setHudCollapsed(!hudEl.classList.contains('collapsed'));
+    });
+}
+
 regenBtn.addEventListener('click', () => generateWorld(presetEl.value));
 
 const regenControls = [
     resolutionEl,
     platesEl,
+    plateSizeVarianceEl,
+    desymmetrizeTilingEl,
     jitterEl,
     heightScaleEl,
     iterationsEl,
@@ -1100,6 +1149,7 @@ const regenControls = [
 ];
 
 function handleDiameterChange() {
+    if (!planetDiameterEl) return;
     updateRangeLabels();
     if (lastPlanetSettings) {
         lastPlanetSettings.planetDiameterKm = getPlanetDiameterKm();
@@ -1134,8 +1184,10 @@ presetEl.addEventListener('change', () => {
     setStatus('Preset applied. Regenerating…');
     queueAutoRegen();
 });
-planetDiameterEl.addEventListener('input', handleDiameterChange);
-planetDiameterEl.addEventListener('change', handleDiameterChange);
+if (planetDiameterEl) {
+    planetDiameterEl.addEventListener('input', handleDiameterChange);
+    planetDiameterEl.addEventListener('change', handleDiameterChange);
+}
 
 // Atmosphere/Cloud controls (no regen)
 function handleAtmosphereUpdate() {

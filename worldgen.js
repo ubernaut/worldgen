@@ -12,8 +12,9 @@ export class PlanetForge {
     // ==========================================================
     // STEP 1: TECTONIC SIMULATION (Voronoi & Faults)
     // ==========================================================
-    generateTectonics({ numPlates = 15, jitter = 0.5, oceanFloor = 0.2, plateDelta = 1.0, faultType = 'ridge' }) {
+    generateTectonics({ numPlates = 15, jitter = 0.5, oceanFloor = 0.2, plateDelta = 1.0, faultType = 'ridge', plateSizeVariance = 0, desymmetrizeTiling = false }) {
         console.time("Tectonics Generation");
+        const variance = Math.max(0, plateSizeVariance);
         
         // 1. Create Plate Centers
         const plates = [];
@@ -22,7 +23,9 @@ export class PlanetForge {
                 x: Math.floor(this.rng() * this.size),
                 y: Math.floor(this.rng() * this.size),
                 z: this.rng() * 0.5 + 0.5, // Plate "uplift" potential
-                type: this.rng() > 0.6 ? 1 : -1 // 1 = Continental, -1 = Oceanic
+                type: this.rng() > 0.6 ? 1 : -1, // 1 = Continental, -1 = Oceanic
+                sizeBias: Math.max(0.25, 1 + (this.rng() * 2 - 1) * variance),
+                skew: desymmetrizeTiling ? (this.rng() * 2 - 1) * variance * 0.5 * this.size : 0
             });
         }
 
@@ -37,13 +40,16 @@ export class PlanetForge {
                 // Check all plates (Brute force is heavy, but accurate for this scale)
                 // Optimization: In a real app, use a spatial hash grid here.
                 for (const plate of plates) {
+                    const pxRaw = desymmetrizeTiling ? (plate.x + plate.skew * (y / this.size)) : plate.x;
+                    const px = ((pxRaw % this.size) + this.size) % this.size;
                     // Handle Horizontal Wrapping (Cylindrical World)
                     const dx = Math.min(
-                        Math.abs(x - plate.x),
-                        this.size - Math.abs(x - plate.x)
+                        Math.abs(x - px),
+                        this.size - Math.abs(x - px)
                     );
                     const dy = y - plate.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const baseDist = Math.sqrt(dx * dx + dy * dy);
+                    const dist = baseDist / plate.sizeBias;
 
                     if (dist < minDist) {
                         secondMinDist = minDist;
